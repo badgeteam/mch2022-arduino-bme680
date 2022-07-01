@@ -100,15 +100,8 @@ void setup()
 
     iaqSensor.begin(BME680_I2C_ADDR_SECONDARY, Wire);
     iaqSensor.setConfig(bsec_config_iaq);
-    //Serial.println(nvs_flash_init() == ESP_OK);
+    Serial.println(nvs_flash_init() == ESP_OK);
     loadState();
-    //nvs_init();
-
-    Serial.println(nvs_get_str_wrapper("owner", "nickname"));
-  Serial.println(nvs_get_str_wrapper("system", "wifi.ssid"));
-  Serial.println(nvs_get_str_wrapper("system", "wifi.password"));
-
-//    nvs_set_u8_fixed("myapp", "thekey", 4);
 
     pinMode(PIN_LED_ENABLE, OUTPUT); // This has to be placed after SPI (LCD) has been initialized (Arduino wants to use this pin as SPI MISO...)
     digitalWrite(PIN_LED_ENABLE, HIGH);
