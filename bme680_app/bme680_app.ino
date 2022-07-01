@@ -326,7 +326,7 @@ void updateState(void)
   /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD or when the callibration level increases */
   if (accuracyUpdateCounter < iaqSensor.iaqAccuracy) {
       Serial.print("accuracy update ");
-      Serial.print(stateUpdateCounter);
+      Serial.print(accuracyUpdateCounter);
       Serial.print(" < ");
       Serial.println(iaqSensor.iaqAccuracy);
       update = true;
