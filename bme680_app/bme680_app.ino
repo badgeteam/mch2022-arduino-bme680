@@ -56,6 +56,8 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_LCD_CS, PIN_LCD_DC, PIN_LCD_RST);
 Bsec iaqSensor;
 uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
 uint16_t stateUpdateCounter = 0;
+uint16_t accuracyUpdateCounter = 0;
+
 
 CRGB leds[NUM_LEDS];
 
@@ -321,27 +323,27 @@ void loadState(void)
 void updateState(void)
 {
   bool update = false;
-  /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
-  if (stateUpdateCounter < iaqSensor.iaqAccuracy) {
+  /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD or when the callibration level increases */
+  if (accuracyUpdateCounter < iaqSensor.iaqAccuracy) {
       Serial.print("accuracy update ");
       Serial.print(stateUpdateCounter);
       Serial.print(" < ");
       Serial.println(iaqSensor.iaqAccuracy);
       update = true;
-      stateUpdateCounter++;
-  } else {
-    /* Update every STATE_SAVE_PERIOD milliseconds */
-    if (stateUpdateCounter && (stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
-      Serial.print("timed update ");
-      Serial.print(stateUpdateCounter);
-      Serial.print(" * ");
-      Serial.print(STATE_SAVE_PERIOD);
-      Serial.print(" < ");
-      Serial.println(millis());
-      update = true;
-      stateUpdateCounter++;
-    }
+      accuracyUpdateCounter++;
   }
+  /* Update every STATE_SAVE_PERIOD milliseconds */
+  if (((stateUpdateCounter+1) * STATE_SAVE_PERIOD) < millis()) {
+    Serial.print("timed update ");
+    Serial.print(stateUpdateCounter);
+    Serial.print(" * ");
+    Serial.print(STATE_SAVE_PERIOD);
+    Serial.print(" < ");
+    Serial.println(millis());
+    update = true;
+    stateUpdateCounter++;
+  }
+
 
   if (update) {
     nvs_handle_t handle;
