@@ -322,14 +322,22 @@ void updateState(void)
 {
   bool update = false;
   /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
-  Serial.println("update?");
-  Serial.println(stateUpdateCounter, iaqSensor.iaqAccuracy);
   if (stateUpdateCounter < iaqSensor.iaqAccuracy) {
+      Serial.print("accuracy update ");
+      Serial.print(stateUpdateCounter);
+      Serial.print(" < ");
+      Serial.println(iaqSensor.iaqAccuracy);
       update = true;
       stateUpdateCounter++;
   } else {
     /* Update every STATE_SAVE_PERIOD milliseconds */
-    if ((stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
+    if (stateUpdateCounter && (stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
+      Serial.print("timed update ");
+      Serial.print(stateUpdateCounter);
+      Serial.print(" * ");
+      Serial.print(STATE_SAVE_PERIOD);
+      Serial.print(" < ");
+      Serial.println(millis());
       update = true;
       stateUpdateCounter++;
     }
