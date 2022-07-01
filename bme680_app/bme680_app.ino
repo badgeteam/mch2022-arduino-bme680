@@ -3,9 +3,35 @@
 #include "Fonts/FreeSans18pt7b.h"
 #include "Fonts/FreeSans12pt7b.h"
 #include "Adafruit_ILI9341.h"
+#include <nvs.h>
+#include <nvs_flash.h>
 
 #include <Wire.h>
 #include "bsec.h"
+/* Configure the BSEC library with information about the sensor
+    18v/33v = Voltage at Vdd. 1.8V or 3.3V
+    3s/300s = BSEC operating mode, BSEC_SAMPLE_RATE_LP or BSEC_SAMPLE_RATE_ULP
+    4d/28d = Operating age of the sensor in days
+    generic_18v_3s_4d
+    generic_18v_3s_28d
+    generic_18v_300s_4d
+    generic_18v_300s_28d
+    generic_33v_3s_4d
+    generic_33v_3s_28d
+    generic_33v_300s_4d
+    generic_33v_300s_28d
+*/
+const uint8_t bsec_config_iaq[] = {
+#include "config/generic_33v_3s_4d/bsec_iaq.txt"
+};
+
+#define STATE_SAVE_PERIOD  UINT32_C(15 * 60 * 1000) // 15 minutes
+
+// Helper functions declarations
+void checkIaqSensorStatus(void);
+void errLeds(void);
+void loadState(void);
+void updateState(void);
 
 #include <FastLED.h>
 
@@ -28,7 +54,32 @@
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_LCD_CS, PIN_LCD_DC, PIN_LCD_RST);
 
 Bsec iaqSensor;
+uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
+uint16_t stateUpdateCounter = 0;
+
 CRGB leds[NUM_LEDS];
+
+String nvs_get_str_wrapper(String ns, String key) {
+  nvs_handle_t handle;
+  nvs_open(ns.c_str(), NVS_READWRITE, &handle);
+  size_t len;
+  esp_err_t res = nvs_get_str(handle, key.c_str(), NULL, &len);
+  if (res != ESP_OK) {
+    nvs_close(handle);
+    return "";
+  }
+  char* str = (char*) malloc(len);
+  res = nvs_get_str(handle, key.c_str(), str, &len);
+  if (res != ESP_OK) {
+    nvs_close(handle);
+    free(str);
+    return "";
+  }
+  String result = str;
+  nvs_close(handle);
+  free(str);
+  return result;
+}
 
 void setup()
 {
@@ -48,6 +99,16 @@ void setup()
     tft.setRotation(1);
 
     iaqSensor.begin(BME680_I2C_ADDR_SECONDARY, Wire);
+    iaqSensor.setConfig(bsec_config_iaq);
+    //Serial.println(nvs_flash_init() == ESP_OK);
+    loadState();
+    //nvs_init();
+
+    Serial.println(nvs_get_str_wrapper("owner", "nickname"));
+  Serial.println(nvs_get_str_wrapper("system", "wifi.ssid"));
+  Serial.println(nvs_get_str_wrapper("system", "wifi.password"));
+
+//    nvs_set_u8_fixed("myapp", "thekey", 4);
 
     pinMode(PIN_LED_ENABLE, OUTPUT); // This has to be placed after SPI (LCD) has been initialized (Arduino wants to use this pin as SPI MISO...)
     digitalWrite(PIN_LED_ENABLE, HIGH);
@@ -221,6 +282,7 @@ void loop(void)
         output += ", " + String(iaqSensor.co2Equivalent);
         output += ", " + String(iaqSensor.breathVocEquivalent);
         Serial.println(output);
+        updateState();
     }
     else if (iaqSensor.status != BSEC_OK)
     {
@@ -243,4 +305,54 @@ void loop(void)
             tft.println("BSEC warning: " + String(iaqSensor.status));
         }
     }
+}
+
+
+void loadState(void)
+{
+  nvs_handle_t handle;
+  esp_err_t    res;
+  size_t size = BSEC_MAX_STATE_BLOB_SIZE;
+  Serial.println("loading state");
+  res = nvs_open("system", NVS_READWRITE, &handle);
+  Serial.println(res == ESP_OK);
+  if (res != ESP_OK) return;
+  res = nvs_get_blob(handle, "BSEC_STATE", bsecState, &size);
+  Serial.println(res == ESP_OK);
+  if (res == ESP_OK) {
+    iaqSensor.setState(bsecState);
+  }
+  nvs_close(handle);
+}
+
+void updateState(void)
+{
+  bool update = false;
+  /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
+  Serial.println("update?");
+  Serial.println(stateUpdateCounter, iaqSensor.iaqAccuracy);
+  if (stateUpdateCounter < iaqSensor.iaqAccuracy) {
+      update = true;
+      stateUpdateCounter++;
+  } else {
+    /* Update every STATE_SAVE_PERIOD milliseconds */
+    if ((stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
+      update = true;
+      stateUpdateCounter++;
+    }
+  }
+
+  if (update) {
+    nvs_handle_t handle;
+    esp_err_t    res;
+    size_t size = BSEC_MAX_STATE_BLOB_SIZE;
+    Serial.println("saving state");
+    res = nvs_open("system", NVS_READWRITE, &handle);
+    Serial.println(res == ESP_OK);
+    if (res != ESP_OK) return;
+    Serial.println("starting setblob");
+    res = nvs_set_blob(handle, "BSEC_STATE", bsecState, size);
+    Serial.println(res == ESP_OK);
+    nvs_close(handle);
+  }
 }
